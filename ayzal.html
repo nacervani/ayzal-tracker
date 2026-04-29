@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ayzal Bank Tracker</title>
+
+<style>
+body { font-family: Arial; margin:0; padding:15px; background:#f5f5f5; }
+h1 { text-align:center; }
+
+.tabs { display:flex; gap:10px; margin:10px 0; }
+.tabs button { flex:1; padding:12px; border:none; border-radius:10px; }
+.active { background:black; color:white; }
+
+.card { background:white; padding:12px; border-radius:10px; margin-bottom:10px; }
+
+input, select, button {
+ width:100%; padding:10px; margin-top:6px; border-radius:8px; border:1px solid #ccc;
+}
+
+button { background:black; color:white; }
+
+canvas { display:block; margin:auto; }
+</style>
+</head>
+
+<body>
+
+<h1>Ayzal Bank Tracker</h1>
+
+<div class="tabs">
+  <button class="active" onclick="showTab('input')">Add Expense</button>
+  <button onclick="showTab('dashboard')">Dashboard</button>
+</div>
+
+<!-- INPUT -->
+<div id="input" class="tab">
+
+<div class="card">
+<input type="date" id="date">
+
+<select id="category">
+<option>Rent / Home Loan</option>
+<option>Utilities</option>
+<option>Internet & Mobile</option>
+<option>Groceries</option>
+<option>Dining Out</option>
+<option>Uber</option>
+<option>Electronics</option>
+<option>Subscriptions</option>
+<option>Medicines</option>
+<option>Investments</option>
+</select>
+
+<input type="text" id="note" placeholder="Particular">
+<input type="number" id="amount" placeholder="Amount">
+
+<select id="medium">
+<option>Savings Account</option>
+<option>Credit Card</option>
+</select>
+
+<button onclick="addExpense()">Add Expense</button>
+</div>
+
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="tab" style="display:none;">
+
+<div class="card">
+<h3>Current Month</h3>
+<h2 id="total">₹0</h2>
+</div>
+
+<div class="card">
+<h3>Previous Month</h3>
+<h2 id="prevTotal">₹0</h2>
+</div>
+
+<div class="card">
+<h3>Change</h3>
+<h2 id="change">₹0</h2>
+</div>
+
+<div class="card">
+<canvas id="chart" width="250" height="250"></canvas>
+</div>
+
+<div class="card">
+<button onclick="exportCSV()">Export CSV</button>
+</div>
+
+</div>
+
+<script>
+
+let data = JSON.parse(localStorage.getItem("exp")) || [];
+
+function save(){ localStorage.setItem("exp", JSON.stringify(data)); }
+
+function addExpense(){
+ let e = {
+  date: date.value,
+  category: category.value,
+  note: note.value,
+  amount: parseFloat(amount.value),
+  medium: medium.value
+ };
+
+ if(!e.date || !e.amount){ alert("Enter required fields"); return; }
+
+ data.push(e);
+ save();
+ render();
+
+ note.value=""; amount.value="";
+}
+
+function showTab(tab){
+ document.querySelectorAll('.tab').forEach(t=>t.style.display='none');
+ document.getElementById(tab).style.display='block';
+
+ document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
+ event.target.classList.add('active');
+
+ render();
+}
+
+function getMonth(offset){
+ let d = new Date();
+ d.setMonth(d.getMonth()+offset);
+ return d.toISOString().slice(0,7);
+}
+
+function render(){
+
+ let currentMonth = getMonth(0);
+ let prevMonth = getMonth(-1);
+
+ let current = data.filter(x=>x.date.startsWith(currentMonth));
+ let prev = data.filter(x=>x.date.startsWith(prevMonth));
+
+ let total = current.reduce((s,e)=>s+e.amount,0);
+ let prevTotal = prev.reduce((s,e)=>s+e.amount,0);
+
+ let change = total - prevTotal;
+
+ document.getElementById("total").innerText = "₹"+total;
+ document.getElementById("prevTotal").innerText = "₹"+prevTotal;
+ document.getElementById("change").innerText = "₹"+change;
+
+ // chart
+ let grouped = {};
+ current.forEach(e=>{
+  grouped[e.category]=(grouped[e.category]||0)+e.amount;
+ });
+
+ drawChart(grouped,total);
+}
+
+function drawChart(grouped,total){
+ let ctx = chart.getContext("2d");
+ ctx.clearRect(0,0,250,250);
+
+ let start=0;
+ let colors=["#111","#444","#777","#aaa","#ccc"];
+
+ let i=0;
+ for(let k in grouped){
+  let val=grouped[k];
+  let slice=(val/total)*2*Math.PI;
+
+  ctx.beginPath();
+  ctx.moveTo(125,125);
+  ctx.arc(125,125,100,start,start+slice);
+  ctx.fillStyle=colors[i++%colors.length];
+  ctx.fill();
+
+  start+=slice;
+ }
+
+ ctx.beginPath();
+ ctx.arc(125,125,50,0,2*Math.PI);
+ ctx.fillStyle="#f5f5f5";
+ ctx.fill();
+}
+
+function exportCSV(){
+ let csv = "Date,Category,Note,Amount,Medium\n";
+
+ data.forEach(e=>{
+  csv += `${e.date},${e.category},${e.note},${e.amount},${e.medium}\n`;
+ });
+
+ let blob = new Blob([csv], {type:'text/csv'});
+ let url = URL.createObjectURL(blob);
+
+ let a = document.createElement("a");
+ a.href = url;
+ a.download = "expenses.csv";
+ a.click();
+}
+
+date.value = new Date().toISOString().slice(0,10);
+
+render();
+
+</script>
+
+</body>
+</html>

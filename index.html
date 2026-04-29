@@ -66,34 +66,27 @@ canvas { display:block; margin:auto; }
 </div>
 
 <!-- DASHBOARD -->
-<div id="dashboard" class="tab" style="display:none;">
-
 <div class="card">
-<h3>Current Month</h3>
-<h2 id="total">₹0</h2>
+<h3>Daily Avg Spend</h3>
+<h2 id="dailyAvg">₹0</h2>
 </div>
 
 <div class="card">
-<h3>Previous Month</h3>
-<h2 id="prevTotal">₹0</h2>
+<h3>Projected Monthly Spend</h3>
+<h2 id="projected">₹0</h2>
 </div>
 
 <div class="card">
-<h3>Change</h3>
-<h2 id="change">₹0</h2>
+<h3>Top Category</h3>
+<h2 id="topCategory">-</h2>
 </div>
 
 <div class="card">
-<canvas id="chart" width="250" height="250"></canvas>
+<h3>Transactions</h3>
+<h2 id="txCount">0</h2>
 </div>
-
-<div class="card">
-<button onclick="exportCSV()">Export CSV</button>
-</div>
-
-</div>
-
 <script>
+
 
 let data = JSON.parse(localStorage.getItem("exp")) || [];
 
@@ -127,12 +120,23 @@ function showTab(tab){
  render();
 }
 
+// ------------------ DATE HELPERS ------------------
 function getMonth(offset){
  let d = new Date();
  d.setMonth(d.getMonth()+offset);
  return d.toISOString().slice(0,7);
 }
 
+function daysInMonth(){
+ let d = new Date();
+ return new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+}
+
+function daysPassed(){
+ return new Date().getDate();
+}
+
+// ------------------ CORE RENDER ------------------
 function render(){
 
  let currentMonth = getMonth(0);
@@ -145,26 +149,62 @@ function render(){
  let prevTotal = prev.reduce((s,e)=>s+e.amount,0);
 
  let change = total - prevTotal;
+ let changePct = prevTotal ? ((change/prevTotal)*100).toFixed(1) : 0;
 
- document.getElementById("total").innerText = "₹"+total;
- document.getElementById("prevTotal").innerText = "₹"+prevTotal;
- document.getElementById("change").innerText = "₹"+change;
+ // -------- NEW METRICS --------
 
- // chart
+ // 1. Daily spend velocity
+ let dailyAvg = total / daysPassed();
+
+ // 2. Projected monthly spend
+ let projected = dailyAvg * daysInMonth();
+
+ // 3. Category grouping
  let grouped = {};
  current.forEach(e=>{
   grouped[e.category]=(grouped[e.category]||0)+e.amount;
  });
 
+ // 4. Top category
+ let topCategory = "-";
+ let topValue = 0;
+
+ for(let k in grouped){
+  if(grouped[k] > topValue){
+    topValue = grouped[k];
+    topCategory = k;
+  }
+ }
+
+ let topPct = total ? ((topValue/total)*100).toFixed(1) : 0;
+
+ // -------- UPDATE UI --------
+
+ document.getElementById("total").innerText = "₹"+Math.round(total);
+ document.getElementById("prevTotal").innerText = "₹"+Math.round(prevTotal);
+
+ document.getElementById("change").innerText =
+  (change>=0?"▲ ":"▼ ") + "₹"+Math.abs(Math.round(change)) +
+  " ("+changePct+"%)";
+
+ document.getElementById("dailyAvg").innerText = "₹"+Math.round(dailyAvg);
+ document.getElementById("projected").innerText = "₹"+Math.round(projected);
+
+ document.getElementById("topCategory").innerText =
+  topCategory + " ("+topPct+"%)";
+
+ document.getElementById("txCount").innerText = current.length;
+
  drawChart(grouped,total);
 }
 
+// ------------------ CHART ------------------
 function drawChart(grouped,total){
  let ctx = chart.getContext("2d");
  ctx.clearRect(0,0,250,250);
 
  let start=0;
- let colors=["#111","#444","#777","#aaa","#ccc"];
+ let colors=["#111","#444","#777","#aaa","#ccc","#222","#666"];
 
  let i=0;
  for(let k in grouped){
@@ -186,6 +226,7 @@ function drawChart(grouped,total){
  ctx.fill();
 }
 
+// ------------------ EXPORT ------------------
 function exportCSV(){
  let csv = "Date,Category,Note,Amount,Medium\n";
 
@@ -200,6 +241,11 @@ function exportCSV(){
  a.href = url;
  a.download = "expenses.csv";
  a.click();
+}
+
+// ------------------ SW ------------------
+if ('serviceWorker' in navigator) {
+ navigator.serviceWorker.register('sw.js');
 }
 
 date.value = new Date().toISOString().slice(0,10);

@@ -1,11 +1,13 @@
 {
-  "name": "Ayzal Bank Tracker",
+  "name": "Ayzal FinLog",
   "short_name": "Ayzal",
+  "description": "Offline personal expense tracker with analytics. No login. No data sharing.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
   "orientation": "portrait",
+  "id": "/?source=pwa",
   "icons": [
     {
       "src": "icon-192.png",

@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ayzal Spending Tracker</title>
+<title>Ayzal FinLog</title>
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#000000">
@@ -26,12 +26,14 @@ input, select, button {
 button { background:black; color:white; }
 
 canvas { display:block; margin:auto; }
+.legend-item { display:flex; align-items:center; margin:4px 0; font-size:12px; }
+.legend-color { width:12px; height:12px; margin-right:6px; }
 </style>
 </head>
 
 <body>
 
-<h1>Ayzal Bank Tracker</h1>
+<h1>Ayzal FinLog</h1>
 
 <div class="tabs">
   <button class="active" onclick="showTab('input', event)">Add Expense</button>
@@ -50,18 +52,32 @@ canvas { display:block; margin:auto; }
 <option>Internet & Mobile</option>
 <option>Groceries</option>
 <option>Dining Out</option>
+<option>Snacks & Coffee</option>
+<option>Food Delivery</option>
+<option>Office Meals</option>
 <option>Uber</option>
-<option>Electronics</option>
+<option>Travel</option>
+<option>Aeroplane</option>
+<option>Clothing</option>
+<option>Footwear</option>
+<option>Accessories</option>
+<option>Electronics & Gadgets</option>
+<option>Personal Care</option>
 <option>Subscriptions</option>
 <option>Medicines</option>
+<option>Loan EMI</option>
+<option>Credit Card Payments</option>
 <option>Investments</option>
+<option>Family Support</option>
+<option>Childcare</option>
+<option>Savings</option>
 </select>
 
 <input type="text" id="note" placeholder="Particular">
 <input type="number" id="amount" placeholder="Amount">
 
 <select id="medium">
-<option>Savings Account</option>
+<option>Bank Account</option>
 <option>Credit Card</option>
 </select>
 
@@ -79,17 +95,7 @@ canvas { display:block; margin:auto; }
 </div>
 
 <div class="card">
-<h3>Previous Month</h3>
-<h2 id="prevTotal">₹0</h2>
-</div>
-
-<div class="card">
-<h3>Change</h3>
-<h2 id="change">₹0</h2>
-</div>
-
-<div class="card">
-<h3>Daily Avg Spend</h3>
+<h3>Daily Avg</h3>
 <h2 id="dailyAvg">₹0</h2>
 </div>
 
@@ -110,10 +116,15 @@ canvas { display:block; margin:auto; }
 
 <div class="card">
 <canvas id="chart" width="250" height="250"></canvas>
+<div id="legend"></div>
 </div>
 
 <div class="card">
 <button onclick="exportCSV()">Export CSV</button>
+</div>
+
+<div class="card">
+<button onclick="clearData()">Clear All Data</button>
 </div>
 
 </div>
@@ -146,7 +157,14 @@ function addExpense(){
  amount.value="";
 }
 
-// FIXED TAB FUNCTION
+function clearData(){
+ if(confirm("WARNING: This will permanently delete ALL your records. This action cannot be undone. Do you want to continue?")){
+  localStorage.removeItem("exp");
+  data = [];
+  render();
+ }
+}
+
 function showTab(tab, evt){
  document.querySelectorAll('.tab').forEach(t=>t.style.display='none');
  document.getElementById(tab).style.display='block';
@@ -157,10 +175,8 @@ function showTab(tab, evt){
  render();
 }
 
-function getMonth(offset){
- let d = new Date();
- d.setMonth(d.getMonth()+offset);
- return d.toISOString().slice(0,7);
+function getMonth(){
+ return new Date().toISOString().slice(0,7);
 }
 
 function daysInMonth(){
@@ -174,17 +190,10 @@ function daysPassed(){
 
 function render(){
 
- let currentMonth = getMonth(0);
- let prevMonth = getMonth(-1);
-
- let current = data.filter(x=>x.date.startsWith(currentMonth));
- let prev = data.filter(x=>x.date.startsWith(prevMonth));
+ let month = getMonth();
+ let current = data.filter(x=>x.date.startsWith(month));
 
  let total = current.reduce((s,e)=>s+e.amount,0);
- let prevTotal = prev.reduce((s,e)=>s+e.amount,0);
-
- let change = total - prevTotal;
- let changePct = prevTotal ? ((change/prevTotal)*100).toFixed(1) : 0;
 
  let dailyAvg = total / daysPassed();
  let projected = dailyAvg * daysInMonth();
@@ -207,48 +216,62 @@ function render(){
  let topPct = total ? ((topValue/total)*100).toFixed(1) : 0;
 
  document.getElementById("total").innerText = "₹"+Math.round(total);
- document.getElementById("prevTotal").innerText = "₹"+Math.round(prevTotal);
-
- document.getElementById("change").innerText =
-  (change>=0?"▲ ":"▼ ") + "₹"+Math.abs(Math.round(change)) +
-  " ("+changePct+"%)";
-
  document.getElementById("dailyAvg").innerText = "₹"+Math.round(dailyAvg);
  document.getElementById("projected").innerText = "₹"+Math.round(projected);
-
- document.getElementById("topCategory").innerText =
-  topCategory + " ("+topPct+"%)";
-
+ document.getElementById("topCategory").innerText = topCategory + " ("+topPct+"%)";
  document.getElementById("txCount").innerText = current.length;
 
- drawChart(grouped,total);
+ drawPieChart(grouped,total);
 }
 
-function drawChart(grouped,total){
+function drawPieChart(grouped,total){
+
  let ctx = chart.getContext("2d");
  ctx.clearRect(0,0,250,250);
 
- let start=0;
- let colors=["#111","#444","#777","#aaa","#ccc","#222","#666"];
+ let colors = [
+  "#FF6384","#36A2EB","#FFCE56","#4CAF50",
+  "#9C27B0","#FF9800","#00BCD4","#795548",
+  "#607D8B","#E91E63","#3F51B5","#8BC34A"
+ ];
 
- let i=0;
+ let start = 0;
+ let i = 0;
+ let legendHTML = "";
+
  for(let k in grouped){
-  let val=grouped[k];
-  let slice=(val/total)*2*Math.PI;
+
+  let val = grouped[k];
+  let slice = (val/total)*2*Math.PI;
 
   ctx.beginPath();
   ctx.moveTo(125,125);
   ctx.arc(125,125,100,start,start+slice);
-  ctx.fillStyle=colors[i++%colors.length];
+  ctx.fillStyle = colors[i % colors.length];
   ctx.fill();
 
-  start+=slice;
+  let mid = start + slice/2;
+  let x = 125 + Math.cos(mid)*60;
+  let y = 125 + Math.sin(mid)*60;
+
+  let pct = ((val/total)*100).toFixed(0) + "%";
+
+  ctx.fillStyle = "white";
+  ctx.font = "10px Arial";
+  ctx.fillText(pct, x, y);
+
+  legendHTML += `
+    <div class="legend-item">
+      <div class="legend-color" style="background:${colors[i % colors.length]}"></div>
+      ${k}
+    </div>
+  `;
+
+  start += slice;
+  i++;
  }
 
- ctx.beginPath();
- ctx.arc(125,125,50,0,2*Math.PI);
- ctx.fillStyle="#f5f5f5";
- ctx.fill();
+ document.getElementById("legend").innerHTML = legendHTML;
 }
 
 function exportCSV(){
